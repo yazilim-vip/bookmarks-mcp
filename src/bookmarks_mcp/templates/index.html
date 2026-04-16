@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+
+{% macro render_tree(parent_id) %}
+  {% set children = children_by_parent.get(parent_id) %}
+  {% if children %}
+    <ul class="tree">
+      {% for f in children %}
+        <li>
+          <div class="row {% if selected_folder and selected_folder.id == f.id %}selected{% endif %}">
+            <a href="/?folder={{ f.id }}">📁 {{ f.name }}</a>
+          </div>
+          {{ render_tree(f.id) }}
+        </li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+{% endmacro %}
+
+{% block sidebar %}
+  <h2>Folders</h2>
+  <ul class="tree">
+    <li class="row {% if not selected_folder and not selected_tag %}selected{% endif %}">
+      <a href="/">All bookmarks</a>
+    </li>
+  </ul>
+  {{ render_tree(None) }}
+
+  <details style="margin-top: 12px;">
+    <summary>+ New folder</summary>
+    <form method="post" action="/folders" class="actions" style="margin-top: 8px;">
+      <input type="hidden" name="parent_id" value="{{ selected_folder.id if selected_folder else '' }}">
+      <input type="text" name="name" placeholder="Folder name" required>
+      <button type="submit">Create</button>
+    </form>
+    {% if selected_folder %}
+      <p class="dim" style="font-size:11px; margin: 6px 0 0;">
+        Will be created under <strong>{{ selected_folder.name }}</strong>.
+      </p>
+    {% endif %}
+  </details>
+
+  <h2>Tags</h2>
+  {% if tags %}
+    <ul class="tree">
+      {% for t, count in tags.items() %}
+        <li class="row {% if selected_tag == t %}selected{% endif %}">
+          <a href="/?tag={{ t }}{% if selected_folder %}&folder={{ selected_folder.id }}{% endif %}">🏷 {{ t }}</a>
+          <span class="ops">{{ count }}</span>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="dim" style="font-size: 12px;">No tags yet.</p>
+  {% endif %}
+{% endblock %}
+
+{% block main %}
+  {% if selected_folder %}
+    <h2 style="margin-top: 0;">📁 {{ selected_folder.name }}</h2>
+    <div class="actions" style="margin-bottom: 16px;">
+      <form method="post" action="/folders/{{ selected_folder.id }}/rename">
+        <input type="text" name="name" value="{{ selected_folder.name }}" required>
+        <button type="submit">Rename</button>
+      </form>
+      <form method="post" action="/folders/{{ selected_folder.id }}/move">
+        <select name="parent_id">
+          <option value="">(root)</option>
+          {% for f in folders if f.id != selected_folder.id %}
+            <option value="{{ f.id }}" {% if f.id == selected_folder.parent_id %}selected{% endif %}>{{ f.name }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit">Move</button>
+      </form>
+      <form method="post" action="/folders/{{ selected_folder.id }}/delete"
+            onsubmit="return confirm('Delete this folder?');">
+        <label style="font-size:12px;"><input type="checkbox" name="recursive" value="1"> recursive</label>
+        <button type="submit" class="danger">Delete folder</button>
+      </form>
+    </div>
+  {% elif selected_tag %}
+    <h2 style="margin-top: 0;">🏷 {{ selected_tag }}</h2>
+    <div class="actions" style="margin-bottom: 16px;">
+      <form method="post" action="/tags/{{ selected_tag }}/rename">
+        <input type="text" name="new_name" value="{{ selected_tag }}" required>
+        <button type="submit">Rename</button>
+      </form>
+      <form method="post" action="/tags/{{ selected_tag }}/delete"
+            onsubmit="return confirm('Remove this tag from all bookmarks?');">
+        <button type="submit" class="danger">Delete tag</button>
+      </form>
+    </div>
+  {% else %}
+    <h2 style="margin-top: 0;">All bookmarks</h2>
+  {% endif %}
+
+  {% if bookmarks %}
+    {% for b in bookmarks %}
+      <div class="bookmark">
+        <strong><a href="{{ b.url }}" target="_blank" rel="noopener">{{ b.title }}</a></strong>
+        <div class="url">{{ b.url }}</div>
+        {% if b.description %}<div class="desc">{{ b.description }}</div>{% endif %}
+        <div class="meta">
+          {% for t in b.tags %}<span class="pill">{{ t }}</span>{% endfor %}
+          {% if b.folder_id and folders_by_id.get(b.folder_id) %}
+            <span class="dim" style="font-size: 12px;">in 📁 {{ folders_by_id[b.folder_id].name }}</span>
+          {% endif %}
+        </div>
+      </div>
+    {% endfor %}
+  {% else %}
+    <div class="empty">No bookmarks here yet — add some via the MCP server.</div>
+  {% endif %}
+{% endblock %}
