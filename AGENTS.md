@@ -18,6 +18,7 @@ MCP server + local web UI for personal bookmark management. Folders, tags, porta
 | web | `src/bookmarks_mcp/web.py` | FastAPI web UI |
 | importers | `src/bookmarks_mcp/importers/` | Netscape HTML + JSON import/export |
 | info | `src/bookmarks_mcp/info.py` | `info` subcommand — prints storage path |
+| web_supervisor | `src/bookmarks_mcp/web_supervisor.py` | Spawns/tracks/terminates the web UI as a background subprocess from the MCP server |
 
 ## Build & Run
 
@@ -60,6 +61,7 @@ uv build
 - **Folders are a strict tree** — each bookmark has at most one `folder_id`; tags are cross-cutting metadata
 - **Storage is JSON-on-disk** — atomic writes (temp + rename); never SQLite (portability over raw speed)
 - **Web UI binds localhost by default** — no authentication; not intended for remote exposure
+- **Web UI can be supervised by the MCP server** — `open_web_ui` / `close_web_ui` / `web_ui_status` tools spawn the FastAPI process as a background subprocess sharing the MCP's environment (same `BOOKMARKS_MCP_DB`); auto-terminated via `atexit` when the MCP exits
 - **MCP stdio protocol uses stdout** — never `print()` to stdout from server code; use `sys.stderr` for logs
 - **Portability is a first-class feature** — Netscape HTML import/export must round-trip with major browsers
 

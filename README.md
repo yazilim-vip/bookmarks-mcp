@@ -36,6 +36,14 @@ claude mcp add bookmarks -- uvx --from git+https://github.com/yazilim-vip/bookma
 
 ### Web UI
 
+The minimal flow needs **no second command** — once the MCP is installed, just ask the agent to open the UI:
+
+> *open my bookmarks UI*
+
+The agent calls the `open_web_ui` tool, which spawns the FastAPI server as a background subprocess (sharing the same JSON file as the MCP) and opens `http://127.0.0.1:8765` in your browser. Tools to manage it: `open_web_ui`, `close_web_ui`, `web_ui_status`. The subprocess auto-stops when the MCP server exits.
+
+If you'd rather start it yourself in a terminal:
+
 ```bash
 uvx --from git+https://github.com/yazilim-vip/bookmarks-mcp bookmarks-mcp web
 # → http://127.0.0.1:8765

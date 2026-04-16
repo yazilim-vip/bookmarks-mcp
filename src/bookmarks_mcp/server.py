@@ -4,6 +4,7 @@ from typing import Any
 
 from fastmcp import FastMCP
 
+from bookmarks_mcp import web_supervisor
 from bookmarks_mcp.paths import default_db_path
 from bookmarks_mcp.service import BookmarkService
 from bookmarks_mcp.storage import Storage
@@ -173,6 +174,34 @@ def delete_tag(tag: str) -> str:
 def stats() -> dict[str, int]:
     """Return total counts of bookmarks, folders, and tags."""
     return get_service().stats()
+
+
+# ---------------------------------------------------------------------
+# Web UI supervisor
+# ---------------------------------------------------------------------
+
+
+@mcp.tool
+def open_web_ui(port: int = 8765, open_in_browser: bool = True) -> dict[str, Any]:
+    """Start the local bookmarks web UI as a background process and return its URL.
+
+    Reuses an already-running instance if one exists. The supervised process
+    inherits this server's environment (so it sees the same BOOKMARKS_MCP_DB)
+    and is terminated automatically when the MCP server exits.
+    """
+    return web_supervisor.open_ui(port=port, open_in_browser=open_in_browser)
+
+
+@mcp.tool
+def close_web_ui() -> str:
+    """Stop the supervised web UI subprocess, if this MCP server started one."""
+    return web_supervisor.close_ui()
+
+
+@mcp.tool
+def web_ui_status() -> dict[str, Any]:
+    """Report whether the local web UI is running and at what URL."""
+    return web_supervisor.status()
 
 
 def run_mcp() -> None:
