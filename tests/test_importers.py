@@ -5,7 +5,7 @@ from pathlib import Path
 from bookmarks_mcp.importers import export_file, import_file, json_io, merge, netscape
 from bookmarks_mcp.models import Bookmark, Folder, Library
 from bookmarks_mcp.service import BookmarkService
-from bookmarks_mcp.storage import Storage
+from bookmarks_mcp.storage import JsonFileStorage as Storage
 
 CHROME_SAMPLE = """<!DOCTYPE NETSCAPE-Bookmark-file-1>
 <!-- This is an automatically generated file. -->

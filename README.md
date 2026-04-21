@@ -1,6 +1,6 @@
 # bookmarks-mcp
 
-> MCP server + local web UI for personal bookmark management. Folders, tags, portable JSON storage, zero binary installs — runs with `uv`.
+> MCP server + local web UI for personal bookmark management. Folders, tags, portable JSON storage — or drive your real Google Chrome bookmarks directly. Zero binary installs, runs with `uv`.
 
 ## Prerequisites
 
@@ -74,6 +74,10 @@ uv run bookmarks-mcp info     # Show storage path
 
 ## Storage
 
+Select a backend with `BOOKMARKS_MCP_BACKEND`. Defaults to `json`.
+
+### `json` backend (default)
+
 Single JSON file, human-readable and git-diffable. Default location follows the XDG Base Directory spec:
 
 - Linux: `~/.local/share/bookmarks-mcp/bookmarks.json`
@@ -81,6 +85,30 @@ Single JSON file, human-readable and git-diffable. Default location follows the 
 - Windows: `%LOCALAPPDATA%\bookmarks-mcp\bookmarks.json`
 
 Override with `BOOKMARKS_MCP_DB=/path/to/file.json`.
+
+### `chrome` backend
+
+Reads and writes the `Bookmarks` JSON file that Google Chrome (and other Chromium browsers) maintain per profile.
+
+```bash
+export BOOKMARKS_MCP_BACKEND=chrome
+export BOOKMARKS_MCP_CHROME_PROFILE=Default   # or "Profile 1", etc.
+# Optional: fully override the path
+export BOOKMARKS_MCP_CHROME_PATH=/custom/path/to/Bookmarks
+```
+
+Defaults per OS:
+
+- macOS: `~/Library/Application Support/Google/Chrome/<profile>/Bookmarks`
+- Linux: `~/.config/google-chrome/<profile>/Bookmarks`
+- Windows: `%LOCALAPPDATA%\Google\Chrome\User Data\<profile>\Bookmarks`
+
+Caveats:
+
+- **Close Chrome before any write.** The server refuses writes while Chrome is running. Override with `BOOKMARKS_MCP_CHROME_FORCE=1` (not recommended — Chrome can overwrite your changes).
+- **Tags are disabled** — Chrome has no tag concept. Tag-related tools still exist but will be no-ops on the Chrome backend.
+- **Backups**: every write produces a `Bookmarks.bak.<timestamp>` next to the live file; the last 10 are kept.
+- **Netscape HTML import/export still work** — use them if you'd rather batch-edit offline.
 
 ## Tech Stack
 

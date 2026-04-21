@@ -9,9 +9,10 @@ from typing import Iterator
 from filelock import FileLock
 
 from bookmarks_mcp.models import Library
+from bookmarks_mcp.storage.base import Storage
 
 
-class Storage:
+class JsonFileStorage(Storage):
     """JSON-on-disk persistence for the Library document.
 
     - Atomic writes via tmp-file + fsync + rename.
