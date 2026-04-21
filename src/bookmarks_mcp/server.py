@@ -5,9 +5,8 @@ from typing import Any
 from fastmcp import FastMCP
 
 from bookmarks_mcp import web_supervisor
-from bookmarks_mcp.paths import default_db_path
 from bookmarks_mcp.service import BookmarkService
-from bookmarks_mcp.storage import Storage
+from bookmarks_mcp.storage import create_storage
 
 mcp: FastMCP = FastMCP("bookmarks-mcp")
 
@@ -17,7 +16,7 @@ _service: BookmarkService | None = None
 def get_service() -> BookmarkService:
     global _service
     if _service is None:
-        _service = BookmarkService(Storage(default_db_path()))
+        _service = BookmarkService(create_storage())
     return _service
 
 

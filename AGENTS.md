@@ -12,8 +12,8 @@ MCP server + local web UI for personal bookmark management. Folders, tags, porta
 |--------|------|---------|
 | cli | `src/bookmarks_mcp/cli.py` | Subcommand dispatcher (mcp / web / import / export / info) |
 | models | `src/bookmarks_mcp/models.py` | Pydantic models: `Bookmark`, `Folder`, `Library` |
-| storage | `src/bookmarks_mcp/storage.py` | JSON-on-disk persistence with atomic writes |
-| paths | `src/bookmarks_mcp/paths.py` | XDG-compliant default storage path resolution |
+| storage | `src/bookmarks_mcp/storage/` | Pluggable storage: `base.Storage` (ABC), `json_file.JsonFileStorage`, `chrome.ChromeStorage`, `factory.create_storage` |
+| paths | `src/bookmarks_mcp/paths.py` | XDG-compliant default storage path resolution (json backend) |
 | server | `src/bookmarks_mcp/server.py` | FastMCP server and tool definitions |
 | web | `src/bookmarks_mcp/web.py` | FastAPI web UI |
 | importers | `src/bookmarks_mcp/importers/` | Netscape HTML + JSON import/export |
@@ -59,7 +59,9 @@ uv build
 - **Cross-platform** — no platform-specific code; data path via `platformdirs`
 - **Version bump required** — CI blocks PRs that don't bump `version` in `pyproject.toml`
 - **Folders are a strict tree** — each bookmark has at most one `folder_id`; tags are cross-cutting metadata
-- **Storage is JSON-on-disk** — atomic writes (temp + rename); never SQLite (portability over raw speed)
+- **Storage is pluggable** — all production callers construct storage via `create_storage()` (reads `BOOKMARKS_MCP_BACKEND`: `json` | `chrome`). Tests use `JsonFileStorage(path)` directly
+- **JSON backend** — atomic writes (temp + rename); never SQLite (portability over raw speed)
+- **Chrome backend** — reads/writes Chrome's `Bookmarks` file; preserves unknown fields via raw-tree cache (`meta_info`, `sync_transaction_version`, etc.); tags disabled; refuses writes while Chrome is running (override `BOOKMARKS_MCP_CHROME_FORCE=1`); backs up to `Bookmarks.bak.<ts>` (keeps last 10)
 - **Web UI binds localhost by default** — no authentication; not intended for remote exposure
 - **Web UI can be supervised by the MCP server** — `open_web_ui` / `close_web_ui` / `web_ui_status` tools spawn the FastAPI process as a background subprocess sharing the MCP's environment (same `BOOKMARKS_MCP_DB`); auto-terminated via `atexit` when the MCP exits
 - **MCP stdio protocol uses stdout** — never `print()` to stdout from server code; use `sys.stderr` for logs

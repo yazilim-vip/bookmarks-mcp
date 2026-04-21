@@ -2,19 +2,24 @@ from __future__ import annotations
 
 import sys
 
-from bookmarks_mcp.paths import ENV_DB_PATH, default_db_path
 from bookmarks_mcp.service import BookmarkService
-from bookmarks_mcp.storage import Storage
+from bookmarks_mcp.storage import create_storage, describe_backend
+from bookmarks_mcp.storage.factory import ENV_BACKEND, ENV_CHROME_PATH, ENV_CHROME_PROFILE
 
 
 def print_info() -> None:
-    path = default_db_path()
-    print(f"storage path: {path}")
-    print(f"exists:       {path.exists()}")
-    print(f"override env: ${ENV_DB_PATH}")
-    if path.exists():
-        stats = BookmarkService(Storage(path)).stats()
+    info = describe_backend()
+    print(f"backend:      {info.name}")
+    print(f"target:       {info.target}")
+    print(f"exists:       {info.target.exists()}")
+    if info.profile:
+        print(f"profile:      {info.profile}")
+    print(f"tags:         {'supported' if info.supports_tags else 'disabled (chrome backend)'}")
+    print(f"env vars:     ${ENV_BACKEND}, ${ENV_CHROME_PROFILE}, ${ENV_CHROME_PATH}")
+    if info.target.exists():
+        stats = BookmarkService(create_storage()).stats()
         print(f"bookmarks:    {stats['bookmarks']}")
         print(f"folders:      {stats['folders']}")
-        print(f"tags:         {stats['tags']}")
+        if info.supports_tags:
+            print(f"tag count:    {stats['tags']}")
     sys.stdout.flush()

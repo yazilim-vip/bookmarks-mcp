@@ -4,8 +4,7 @@ from pathlib import Path
 
 from bookmarks_mcp.importers import json_io, netscape
 from bookmarks_mcp.models import Library
-from bookmarks_mcp.paths import default_db_path
-from bookmarks_mcp.storage import Storage
+from bookmarks_mcp.storage import Storage, create_storage
 
 _FORMATS = {"html", "json"}
 
@@ -50,7 +49,7 @@ def merge(target: Library, source: Library, dedupe: bool = True) -> dict[str, in
 
 
 def import_file(path: str | Path, fmt: str, storage: Storage | None = None) -> dict[str, int]:
-    storage = storage or Storage(default_db_path())
+    storage = storage or create_storage()
     text = Path(path).read_text(encoding="utf-8")
     incoming = _parse(text, fmt)
     with storage.transaction() as library:
@@ -59,7 +58,7 @@ def import_file(path: str | Path, fmt: str, storage: Storage | None = None) -> d
 
 
 def export_file(path: str | Path, fmt: str, storage: Storage | None = None) -> dict[str, int]:
-    storage = storage or Storage(default_db_path())
+    storage = storage or create_storage()
     library = storage.load()
     text = _serialize(library, fmt)
     Path(path).write_text(text, encoding="utf-8")

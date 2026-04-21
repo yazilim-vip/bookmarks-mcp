@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from bookmarks_mcp.models import Bookmark, Library
-from bookmarks_mcp.storage import Storage
+from bookmarks_mcp.storage import JsonFileStorage as Storage
 
 
 def test_load_returns_empty_library_when_file_missing(tmp_path: Path):

@@ -9,9 +9,8 @@ from fastapi.templating import Jinja2Templates
 
 from bookmarks_mcp.errors import BookmarksError
 from bookmarks_mcp.models import Folder
-from bookmarks_mcp.paths import default_db_path
 from bookmarks_mcp.service import BookmarkService
-from bookmarks_mcp.storage import Storage
+from bookmarks_mcp.storage import create_storage
 
 app = FastAPI(title="bookmarks-mcp")
 
@@ -24,7 +23,7 @@ _service: BookmarkService | None = None
 def get_service() -> BookmarkService:
     global _service
     if _service is None:
-        _service = BookmarkService(Storage(default_db_path()))
+        _service = BookmarkService(create_storage())
     return _service
 
 

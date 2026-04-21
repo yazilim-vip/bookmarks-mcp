@@ -5,12 +5,12 @@ from pathlib import Path
 import pytest
 
 from bookmarks_mcp.service import BookmarkService
-from bookmarks_mcp.storage import Storage
+from bookmarks_mcp.storage import JsonFileStorage, Storage
 
 
 @pytest.fixture
 def storage(tmp_path: Path) -> Storage:
-    return Storage(tmp_path / "bookmarks.json")
+    return JsonFileStorage(tmp_path / "bookmarks.json")
 
 
 @pytest.fixture
