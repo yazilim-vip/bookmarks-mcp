@@ -105,19 +105,29 @@ def _dt_to_webkit(dt: datetime | None) -> str:
 # ---------------------------------------------------------------------------
 
 
+# Exact process names of the main Chrome/Chromium browser process. We match on
+# exact name (pgrep -x) rather than full command line (pgrep -f) because Electron
+# apps (VSCode, Cursor, Kiro, Slack, Discord, ...) carry "Chromium" in their
+# command lines and would otherwise trigger false positives.
+_CHROME_PROCESS_NAMES = ("Google Chrome", "Chromium", "chromium", "chrome")
+
+
 def _chrome_running() -> bool:
     if os.environ.get(_ENV_FORCE) == "1":
         return False
+    system = platform.system()
     try:
-        system = platform.system()
-        if system == "Darwin" or system == "Linux":
-            res = subprocess.run(
-                ["pgrep", "-if", "google chrome|chromium"],
-                capture_output=True,
-                text=True,
-                timeout=2,
-            )
-            return res.returncode == 0 and bool(res.stdout.strip())
+        if system in ("Darwin", "Linux"):
+            for name in _CHROME_PROCESS_NAMES:
+                res = subprocess.run(
+                    ["pgrep", "-x", name],
+                    capture_output=True,
+                    text=True,
+                    timeout=2,
+                )
+                if res.returncode == 0 and res.stdout.strip():
+                    return True
+            return False
         if system == "Windows":
             res = subprocess.run(
                 ["tasklist", "/FI", "IMAGENAME eq chrome.exe"],
@@ -219,8 +229,10 @@ class ChromeStorage(Storage):
     def save(self, library: Library) -> None:
         if _chrome_running():
             raise ChromeRunningError(
-                "Google Chrome is running. Close it before writing, or set "
-                f"{_ENV_FORCE}=1 to override (not recommended)."
+                "Google Chrome is running. Fully quit Chrome (Cmd+Q on macOS) "
+                "before writing — closing the window is not enough. "
+                f"Set {_ENV_FORCE}=1 to override (not recommended; Chrome can "
+                "overwrite your changes on its next flush)."
             )
         if self._raw is None:
             # Populate raw cache if save() is called without a prior load().
