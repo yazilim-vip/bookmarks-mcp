@@ -1,82 +1,83 @@
 # bookmarks-mcp
 
-> MCP server + local web UI for personal bookmark management. Folders, tags, portable JSON storage — or drive your real Google Chrome bookmarks directly. Zero binary installs, runs with `uv`.
+[![CI](https://github.com/yazilim-vip/bookmarks-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/yazilim-vip/bookmarks-mcp/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/yazilim-vip/bookmarks-mcp)](https://github.com/yazilim-vip/bookmarks-mcp/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+> MCP server for personal bookmark management. Drive your live **Google Chrome** bookmarks from any MCP client, or use a portable JSON store. Folders, tags, zero binary installs — runs with `uv`.
 
 ## Prerequisites
 
 - Python 3.11+
-- `uv` installed ([installation guide](https://docs.astral.sh/uv/getting-started/installation/))
+- [`uv`](https://docs.astral.sh/uv/getting-started/installation/)
 
-## Install
+## Quickstart — Chrome backend
 
-**No clone needed** — run directly from GitHub:
+**Close Chrome before any write.** The server refuses writes while Chrome is running.
 
-**Claude Code CLI:**
+### Claude Code CLI
 
 ```bash
-claude mcp add bookmarks -- uvx --from git+https://github.com/yazilim-vip/bookmarks-mcp bookmarks-mcp
+claude mcp add bookmarks \
+  -e BOOKMARKS_MCP_BACKEND=chrome \
+  -e BOOKMARKS_MCP_CHROME_PROFILE=Default \
+  -- uvx --from git+https://github.com/yazilim-vip/bookmarks-mcp bookmarks-mcp
 ```
 
-**Claude Desktop** (`claude_desktop_config.json`):
+### Claude Desktop (`claude_desktop_config.json`)
 
 ```json
 {
   "mcpServers": {
     "bookmarks": {
       "command": "uvx",
-      "args": [
-        "--from",
-        "git+https://github.com/yazilim-vip/bookmarks-mcp",
-        "bookmarks-mcp"
-      ]
+      "args": ["--from", "git+https://github.com/yazilim-vip/bookmarks-mcp", "bookmarks-mcp"],
+      "env": {
+        "BOOKMARKS_MCP_BACKEND": "chrome",
+        "BOOKMARKS_MCP_CHROME_PROFILE": "Default"
+      }
     }
   }
 }
 ```
 
-### Web UI
+## Quickstart — JSON backend (default)
 
-The minimal flow needs **no second command** — once the MCP is installed, just ask the agent to open the UI:
-
-> *open my bookmarks UI*
-
-The agent calls the `open_web_ui` tool, which spawns the FastAPI server as a background subprocess (sharing the same JSON file as the MCP) and opens `http://127.0.0.1:8765` in your browser. Tools to manage it: `open_web_ui`, `close_web_ui`, `web_ui_status`. The subprocess auto-stops when the MCP server exits.
-
-If you'd rather start it yourself in a terminal:
+Self-contained bookmark store, independent of any browser. Useful for portable/syncable personal libraries and for agent workflows that shouldn't touch your live Chrome data.
 
 ```bash
-uvx --from git+https://github.com/yazilim-vip/bookmarks-mcp bookmarks-mcp web
-# → http://127.0.0.1:8765
+claude mcp add bookmarks -- uvx --from git+https://github.com/yazilim-vip/bookmarks-mcp bookmarks-mcp
 ```
 
-### Import / Export
+## Backends
 
-```bash
-# Netscape HTML (round-trips with Chrome/Firefox/Safari/Edge)
-bookmarks-mcp import bookmarks.html --format html
-bookmarks-mcp export bookmarks.html --format html
+Select with `BOOKMARKS_MCP_BACKEND` (default `json`).
 
-# Full-fidelity JSON
-bookmarks-mcp export backup.json --format json
-bookmarks-mcp import backup.json --format json
-```
+### `chrome`
 
-### Local development
+Reads and writes the `Bookmarks` JSON file that Google Chrome and other Chromium browsers maintain per profile.
 
-```bash
-git clone git@github.com:yazilim-vip/bookmarks-mcp.git
-cd bookmarks-mcp
-uv sync --group dev
-uv run bookmarks-mcp          # MCP stdio server
-uv run bookmarks-mcp web      # Web UI
-uv run bookmarks-mcp info     # Show storage path
-```
+| Env var | Default | Purpose |
+|---|---|---|
+| `BOOKMARKS_MCP_BACKEND` | `json` | Set to `chrome` to select this backend |
+| `BOOKMARKS_MCP_CHROME_PROFILE` | `Default` | Profile directory name (e.g. `Profile 1`) |
+| `BOOKMARKS_MCP_CHROME_PATH` | — | Fully override the path to the `Bookmarks` file |
+| `BOOKMARKS_MCP_CHROME_FORCE` | — | Set to `1` to allow writes while Chrome is running (not recommended) |
 
-## Storage
+Default path per OS:
 
-Select a backend with `BOOKMARKS_MCP_BACKEND`. Defaults to `json`.
+- macOS: `~/Library/Application Support/Google/Chrome/<profile>/Bookmarks`
+- Linux: `~/.config/google-chrome/<profile>/Bookmarks`
+- Windows: `%LOCALAPPDATA%\Google\Chrome\User Data\<profile>\Bookmarks`
 
-### `json` backend (default)
+Behavior:
+
+- **Close Chrome before writes.** The server refuses writes while Chrome runs.
+- **Backups.** Every write snapshots to `Bookmarks.bak.<ISO8601>` next to the live file; last 10 are kept.
+- **Tags are disabled.** Chrome has no tag concept. The `list_tags` / `rename_tag` / `delete_tag` tools exist but are no-ops in this mode.
+- **Unknown fields preserved.** Chrome-specific state (`meta_info`, `sync_transaction_version`, guids) survives round-trips.
+
+### `json`
 
 Single JSON file, human-readable and git-diffable. Default location follows the XDG Base Directory spec:
 
@@ -86,36 +87,40 @@ Single JSON file, human-readable and git-diffable. Default location follows the 
 
 Override with `BOOKMARKS_MCP_DB=/path/to/file.json`.
 
-### `chrome` backend
+## Import / Export
 
-Reads and writes the `Bookmarks` JSON file that Google Chrome (and other Chromium browsers) maintain per profile.
+Netscape HTML — round-trips with Chrome/Firefox/Safari/Edge — and full-fidelity JSON backups work against whichever backend is active:
 
 ```bash
-export BOOKMARKS_MCP_BACKEND=chrome
-export BOOKMARKS_MCP_CHROME_PROFILE=Default   # or "Profile 1", etc.
-# Optional: fully override the path
-export BOOKMARKS_MCP_CHROME_PATH=/custom/path/to/Bookmarks
+bookmarks-mcp import bookmarks.html --format html
+bookmarks-mcp export bookmarks.html --format html
+
+bookmarks-mcp export backup.json --format json
+bookmarks-mcp import backup.json --format json
 ```
 
-Defaults per OS:
+## Local development
 
-- macOS: `~/Library/Application Support/Google/Chrome/<profile>/Bookmarks`
-- Linux: `~/.config/google-chrome/<profile>/Bookmarks`
-- Windows: `%LOCALAPPDATA%\Google\Chrome\User Data\<profile>\Bookmarks`
+```bash
+git clone git@github.com:yazilim-vip/bookmarks-mcp.git
+cd bookmarks-mcp
+uv sync --group dev
+uv run bookmarks-mcp          # MCP stdio server
+uv run bookmarks-mcp info     # Show active backend + storage path
+uv run pytest
+uv run ruff check .
+```
 
-Caveats:
-
-- **Close Chrome before any write.** The server refuses writes while Chrome is running. Override with `BOOKMARKS_MCP_CHROME_FORCE=1` (not recommended — Chrome can overwrite your changes).
-- **Tags are disabled** — Chrome has no tag concept. Tag-related tools still exist but will be no-ops on the Chrome backend.
-- **Backups**: every write produces a `Bookmarks.bak.<timestamp>` next to the live file; the last 10 are kept.
-- **Netscape HTML import/export still work** — use them if you'd rather batch-edit offline.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the PR version-bump rule and backend-authoring checklist.
 
 ## Tech Stack
 
 - **Python** ≥ 3.11
 - **FastMCP** — MCP server framework
-- **FastAPI + Uvicorn** — local web UI
-- **Pydantic** — data models
-- **Jinja2** — web templates
-- **BeautifulSoup4** — Netscape HTML parsing
-- **uv** — Fast Python package manager and runner
+- **Pydantic** — typed data models
+- **BeautifulSoup4 + lxml** — Netscape HTML parsing
+- **uv** — package manager and runner
+
+## License
+
+[MIT](LICENSE)

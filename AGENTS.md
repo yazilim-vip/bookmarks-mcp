@@ -2,23 +2,21 @@
 
 ## Identity
 
-MCP server + local web UI for personal bookmark management. Folders, tags, portable JSON storage. Designed for single-user laptop use — data lives as a single JSON file that syncs trivially via Dropbox/iCloud/Syncthing.
+MCP server for personal bookmark management. Drives Google Chrome's live `Bookmarks` file or a portable JSON store. Single-user, laptop-local, agent-first — no web UI, no auth, no server.
 
-**Tech Stack:** Python 3.11+, FastMCP, FastAPI, Uvicorn, Pydantic, Jinja2, BeautifulSoup4, uv
+**Tech Stack:** Python 3.11+, FastMCP, Pydantic, BeautifulSoup4 + lxml, uv
 
 ## Module Map
 
 | Module | Path | Purpose |
 |--------|------|---------|
-| cli | `src/bookmarks_mcp/cli.py` | Subcommand dispatcher (mcp / web / import / export / info) |
+| cli | `src/bookmarks_mcp/cli.py` | Subcommand dispatcher (mcp / import / export / info) |
 | models | `src/bookmarks_mcp/models.py` | Pydantic models: `Bookmark`, `Folder`, `Library` |
 | storage | `src/bookmarks_mcp/storage/` | Pluggable storage: `base.Storage` (ABC), `json_file.JsonFileStorage`, `chrome.ChromeStorage`, `factory.create_storage` |
 | paths | `src/bookmarks_mcp/paths.py` | XDG-compliant default storage path resolution (json backend) |
 | server | `src/bookmarks_mcp/server.py` | FastMCP server and tool definitions |
-| web | `src/bookmarks_mcp/web.py` | FastAPI web UI |
 | importers | `src/bookmarks_mcp/importers/` | Netscape HTML + JSON import/export |
-| info | `src/bookmarks_mcp/info.py` | `info` subcommand — prints storage path |
-| web_supervisor | `src/bookmarks_mcp/web_supervisor.py` | Spawns/tracks/terminates the web UI as a background subprocess from the MCP server |
+| info | `src/bookmarks_mcp/info.py` | `info` subcommand — prints active backend + storage path |
 
 ## Build & Run
 
@@ -29,10 +27,7 @@ uv sync --group dev
 # Run MCP server (stdio)
 uv run bookmarks-mcp
 
-# Run Web UI (defaults to 127.0.0.1:8765)
-uv run bookmarks-mcp web
-
-# Show storage path and status
+# Show active backend + storage path
 uv run bookmarks-mcp info
 
 # Run directly from GitHub (no clone)
@@ -62,8 +57,7 @@ uv build
 - **Storage is pluggable** — all production callers construct storage via `create_storage()` (reads `BOOKMARKS_MCP_BACKEND`: `json` | `chrome`). Tests use `JsonFileStorage(path)` directly
 - **JSON backend** — atomic writes (temp + rename); never SQLite (portability over raw speed)
 - **Chrome backend** — reads/writes Chrome's `Bookmarks` file; preserves unknown fields via raw-tree cache (`meta_info`, `sync_transaction_version`, etc.); tags disabled; refuses writes while Chrome is running (override `BOOKMARKS_MCP_CHROME_FORCE=1`); backs up to `Bookmarks.bak.<ts>` (keeps last 10)
-- **Web UI binds localhost by default** — no authentication; not intended for remote exposure
-- **Web UI can be supervised by the MCP server** — `open_web_ui` / `close_web_ui` / `web_ui_status` tools spawn the FastAPI process as a background subprocess sharing the MCP's environment (same `BOOKMARKS_MCP_DB`); auto-terminated via `atexit` when the MCP exits
+- **No web UI** — removed in 0.8.0. Chrome's `chrome://bookmarks` fills that niche for the Chrome backend; the JSON backend relies on direct file editing or the MCP tools
 - **MCP stdio protocol uses stdout** — never `print()` to stdout from server code; use `sys.stderr` for logs
 - **Portability is a first-class feature** — Netscape HTML import/export must round-trip with major browsers
 
@@ -72,9 +66,7 @@ uv build
 | Dependency | Relationship |
 |-----------|-------------|
 | FastMCP | MCP server framework |
-| FastAPI + Uvicorn | Local web UI |
 | Pydantic | Typed data models and JSON (de)serialization |
-| Jinja2 | Web UI templating |
-| BeautifulSoup4 | Netscape HTML bookmark format parsing |
+| BeautifulSoup4 + lxml | Netscape HTML bookmark format parsing |
 | platformdirs | Cross-platform XDG data directory resolution |
 | uv | Package management and execution |
