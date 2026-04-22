@@ -8,6 +8,7 @@ from bookmarks_mcp.errors import (
     FolderCycleError,
     FolderNotEmptyError,
     FolderNotFoundError,
+    ReorderMismatchError,
 )
 from bookmarks_mcp.models import Bookmark, Folder, Library, normalize_tag
 from bookmarks_mcp.storage import Storage
@@ -46,6 +47,40 @@ def _next_position(library: Library, parent_id: str | None) -> int:
         if b.folder_id == parent_id and b.position > highest:
             highest = b.position
     return highest + 1
+
+
+def _siblings_ordered(library: Library, parent_id: str | None) -> list[Folder | Bookmark]:
+    """Return direct children (folders + bookmarks) of parent_id in (position, id) order."""
+    items: list[Folder | Bookmark] = []
+    for f in library.folders:
+        if f.parent_id == parent_id:
+            items.append(f)
+    for b in library.bookmarks:
+        if b.folder_id == parent_id:
+            items.append(b)
+    items.sort(key=lambda it: (it.position, it.id))
+    return items
+
+
+def _insert_and_renumber(
+    library: Library,
+    parent_id: str | None,
+    moving_item: Folder | Bookmark,
+    index: int | None,
+) -> None:
+    """Place ``moving_item`` at ``index`` among parent's children and assign dense 0..N positions.
+
+    ``index=None`` appends at the end. ``index`` is clamped at the upper end; negative
+    values are rejected by the caller. The moving item must already be configured with
+    its new parent (``folder.parent_id`` / ``bookmark.folder_id``) before calling.
+    """
+    siblings = [it for it in _siblings_ordered(library, parent_id) if it.id != moving_item.id]
+    if index is None or index >= len(siblings):
+        siblings.append(moving_item)
+    else:
+        siblings.insert(index, moving_item)
+    for pos, item in enumerate(siblings):
+        item.position = pos
 
 
 def _would_create_cycle(library: Library, folder_id: str, new_parent_id: str | None) -> bool:
@@ -124,16 +159,17 @@ class BookmarkService:
             folder.updated_at = _now()
         return folder
 
-    def move_folder(self, folder_id: str, parent_id: str | None) -> Folder:
+    def move_folder(self, folder_id: str, parent_id: str | None, index: int | None = None) -> Folder:
+        if index is not None and index < 0:
+            raise ValueError(f"index must be non-negative, got {index}")
         with self.storage.transaction() as library:
             folder = self._require_folder(library, folder_id)
             if parent_id is not None:
                 self._require_folder(library, parent_id)
             if _would_create_cycle(library, folder_id, parent_id):
                 raise FolderCycleError(folder_id, parent_id)
-            new_position = _next_position(library, parent_id)
             folder.parent_id = parent_id
-            folder.position = new_position
+            _insert_and_renumber(library, parent_id, folder, index)
             folder.updated_at = _now()
         return folder
 
@@ -223,14 +259,15 @@ class BookmarkService:
             bookmark.updated_at = _now()
         return bookmark
 
-    def move_bookmark(self, bookmark_id: str, folder_id: str | None) -> Bookmark:
+    def move_bookmark(self, bookmark_id: str, folder_id: str | None, index: int | None = None) -> Bookmark:
+        if index is not None and index < 0:
+            raise ValueError(f"index must be non-negative, got {index}")
         with self.storage.transaction() as library:
             bookmark = self._require_bookmark(library, bookmark_id)
             if folder_id is not None:
                 self._require_folder(library, folder_id)
-            new_position = _next_position(library, folder_id)
             bookmark.folder_id = folder_id
-            bookmark.position = new_position
+            _insert_and_renumber(library, folder_id, bookmark, index)
             bookmark.updated_at = _now()
         return bookmark
 
@@ -238,6 +275,45 @@ class BookmarkService:
         with self.storage.transaction() as library:
             self._require_bookmark(library, bookmark_id)
             library.bookmarks = [b for b in library.bookmarks if b.id != bookmark_id]
+
+    # -----------------------------------------------------------------
+    # Ordering
+    # -----------------------------------------------------------------
+
+    def reorder_children(self, parent_id: str | None, ordered_ids: list[str]) -> int:
+        """Reorder ``parent_id``'s direct children (folders + bookmarks combined).
+
+        ``ordered_ids`` must be a permutation of the parent's current direct children.
+        Assigns ``position = 0..N-1`` in the given order. Returns the number of
+        reordered children. Atomic within a single storage transaction.
+        """
+        with self.storage.transaction() as library:
+            if parent_id is not None:
+                self._require_folder(library, parent_id)
+            current = _siblings_ordered(library, parent_id)
+            current_ids = {it.id for it in current}
+            provided_ids = set(ordered_ids)
+            if len(ordered_ids) != len(set(ordered_ids)):
+                raise ReorderMismatchError(parent_id, "ordered_ids contains duplicates")
+            unknown = provided_ids - current_ids
+            if unknown:
+                raise ReorderMismatchError(
+                    parent_id,
+                    f"ids not direct children of this parent: {sorted(unknown)}",
+                )
+            missing = current_ids - provided_ids
+            if missing:
+                raise ReorderMismatchError(
+                    parent_id,
+                    f"ordered_ids is missing current children: {sorted(missing)}",
+                )
+            by_id: dict[str, Folder | Bookmark] = {it.id: it for it in current}
+            now = _now()
+            for pos, child_id in enumerate(ordered_ids):
+                item = by_id[child_id]
+                item.position = pos
+                item.updated_at = now
+        return len(ordered_ids)
 
     # -----------------------------------------------------------------
     # Tags

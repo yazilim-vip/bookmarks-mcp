@@ -66,9 +66,14 @@ def rename_folder(folder_id: str, name: str) -> dict[str, Any]:
 
 
 @mcp.tool
-def move_folder(folder_id: str, parent_id: str | None) -> dict[str, Any]:
-    """Move a folder under a new parent. Pass parent_id=None to move to root. Cycles are rejected."""
-    return _dump(get_service().move_folder(folder_id, parent_id))
+def move_folder(folder_id: str, parent_id: str | None, index: int | None = None) -> dict[str, Any]:
+    """Move a folder under a new parent. Pass parent_id=None to move to root. Cycles are rejected.
+
+    Optional index inserts the folder at a specific slot among the new parent's children
+    (folders + bookmarks combined, sorted by position). index=0 is first; index >= sibling
+    count or index=None appends at the end. Negative values raise ValueError.
+    """
+    return _dump(get_service().move_folder(folder_id, parent_id, index))
 
 
 @mcp.tool
@@ -126,9 +131,14 @@ def update_bookmark(
 
 
 @mcp.tool
-def move_bookmark(bookmark_id: str, folder_id: str | None) -> dict[str, Any]:
-    """Move a bookmark to a different folder. Pass folder_id=None to move to root."""
-    return _dump(get_service().move_bookmark(bookmark_id, folder_id))
+def move_bookmark(bookmark_id: str, folder_id: str | None, index: int | None = None) -> dict[str, Any]:
+    """Move a bookmark to a different folder. Pass folder_id=None to move to root.
+
+    Optional index inserts the bookmark at a specific slot among the new parent's children
+    (folders + bookmarks combined, sorted by position). index=0 is first; index >= sibling
+    count or index=None appends at the end. Negative values raise ValueError.
+    """
+    return _dump(get_service().move_bookmark(bookmark_id, folder_id, index))
 
 
 @mcp.tool
@@ -161,6 +171,27 @@ def delete_tag(tag: str) -> str:
     """Remove a tag from every bookmark that has it."""
     affected = get_service().delete_tag(tag)
     return f"removed tag from {affected} bookmark(s)"
+
+
+# ---------------------------------------------------------------------
+# Ordering
+# ---------------------------------------------------------------------
+
+
+@mcp.tool
+def reorder_children(parent_id: str | None, ordered_ids: list[str]) -> str:
+    """Reorder the direct children (folders + bookmarks) of a parent.
+
+    ``ordered_ids`` must be a permutation of the parent's current direct children —
+    every existing child must appear exactly once; unknown ids or ids belonging to
+    another parent are rejected. Assigns position = 0..N-1 in the given order.
+
+    Pass parent_id=None to target the root level. Note on the Chrome backend: the root
+    level contains the three Chrome root folders (Bookmarks Bar, Other, Mobile) as
+    peers; pass one of those folder ids (not None) to reorder inside one of them.
+    """
+    count = get_service().reorder_children(parent_id, ordered_ids)
+    return f"reordered {count} child(ren)"
 
 
 # ---------------------------------------------------------------------

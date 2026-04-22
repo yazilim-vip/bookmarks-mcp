@@ -7,8 +7,16 @@ from bookmarks_mcp.errors import (
     FolderCycleError,
     FolderNotEmptyError,
     FolderNotFoundError,
+    ReorderMismatchError,
 )
 from bookmarks_mcp.service import BookmarkService
+
+
+def _ordered_child_ids(service: BookmarkService, parent_id):
+    folders = [(f.position, f.id) for f in service.list_folders(parent_id)]
+    bookmarks = [(b.position, b.id) for b in service.list_bookmarks(folder_id=parent_id)]
+    combined = sorted(folders + bookmarks, key=lambda it: (it[0], it[1]))
+    return [cid for _, cid in combined]
 
 
 def test_create_and_list_folders(service: BookmarkService):
@@ -183,6 +191,106 @@ def test_move_folder_lands_at_end_of_new_parent(service: BookmarkService):
 
     moved = service.move_folder(orphan.id, dst.id)
     assert moved.position > max(child1.position, child2.position)
+
+
+def test_move_bookmark_with_explicit_index(service: BookmarkService):
+    parent = service.create_folder("P")
+    a = service.add_bookmark(url="https://a.example", title="A", folder_id=parent.id)
+    b = service.add_bookmark(url="https://b.example", title="B", folder_id=parent.id)
+    c = service.add_bookmark(url="https://c.example", title="C", folder_id=parent.id)
+    x = service.add_bookmark(url="https://x.example", title="X")
+
+    # index=0 — first
+    service.move_bookmark(x.id, parent.id, index=0)
+    assert _ordered_child_ids(service, parent.id) == [x.id, a.id, b.id, c.id]
+
+    # move x out, then back with index=2 — third
+    service.move_bookmark(x.id, None)
+    service.move_bookmark(x.id, parent.id, index=2)
+    assert _ordered_child_ids(service, parent.id) == [a.id, b.id, x.id, c.id]
+
+    # very large index — appended
+    service.move_bookmark(x.id, None)
+    service.move_bookmark(x.id, parent.id, index=9999)
+    assert _ordered_child_ids(service, parent.id) == [a.id, b.id, c.id, x.id]
+
+
+def test_move_folder_with_explicit_index(service: BookmarkService):
+    parent = service.create_folder("P")
+    a = service.create_folder("A", parent_id=parent.id)
+    b = service.create_folder("B", parent_id=parent.id)
+    c = service.create_folder("C", parent_id=parent.id)
+    x = service.create_folder("X")
+
+    service.move_folder(x.id, parent.id, index=0)
+    assert _ordered_child_ids(service, parent.id) == [x.id, a.id, b.id, c.id]
+
+    service.move_folder(x.id, None)
+    service.move_folder(x.id, parent.id, index=2)
+    assert _ordered_child_ids(service, parent.id) == [a.id, b.id, x.id, c.id]
+
+    service.move_folder(x.id, None)
+    service.move_folder(x.id, parent.id, index=9999)
+    assert _ordered_child_ids(service, parent.id) == [a.id, b.id, c.id, x.id]
+
+
+def test_move_with_negative_index_raises(service: BookmarkService):
+    parent = service.create_folder("P")
+    b = service.add_bookmark(url="https://a.example", title="A")
+    f = service.create_folder("F")
+    with pytest.raises(ValueError):
+        service.move_bookmark(b.id, parent.id, index=-1)
+    with pytest.raises(ValueError):
+        service.move_folder(f.id, parent.id, index=-1)
+
+
+def test_reorder_children_happy_path(service: BookmarkService):
+    parent = service.create_folder("P")
+    a = service.add_bookmark(url="https://a.example", title="A", folder_id=parent.id)
+    b = service.add_bookmark(url="https://b.example", title="B", folder_id=parent.id)
+    c = service.add_bookmark(url="https://c.example", title="C", folder_id=parent.id)
+    d = service.add_bookmark(url="https://d.example", title="D", folder_id=parent.id)
+
+    service.reorder_children(parent.id, [c.id, a.id, d.id, b.id])
+    assert _ordered_child_ids(service, parent.id) == [c.id, a.id, d.id, b.id]
+
+
+def test_reorder_children_mixes_folders_and_bookmarks(service: BookmarkService):
+    parent = service.create_folder("P")
+    f1 = service.create_folder("F1", parent_id=parent.id)
+    bm1 = service.add_bookmark(url="https://a.example", title="A", folder_id=parent.id)
+    f2 = service.create_folder("F2", parent_id=parent.id)
+    bm2 = service.add_bookmark(url="https://b.example", title="B", folder_id=parent.id)
+
+    service.reorder_children(parent.id, [bm2.id, f1.id, bm1.id, f2.id])
+    assert _ordered_child_ids(service, parent.id) == [bm2.id, f1.id, bm1.id, f2.id]
+
+
+def test_reorder_children_rejects_missing_id(service: BookmarkService):
+    parent = service.create_folder("P")
+    a = service.add_bookmark(url="https://a.example", title="A", folder_id=parent.id)
+    b = service.add_bookmark(url="https://b.example", title="B", folder_id=parent.id)
+    service.add_bookmark(url="https://c.example", title="C", folder_id=parent.id)
+    with pytest.raises(ReorderMismatchError):
+        service.reorder_children(parent.id, [a.id, b.id])
+
+
+def test_reorder_children_rejects_unknown_id(service: BookmarkService):
+    parent = service.create_folder("P")
+    a = service.add_bookmark(url="https://a.example", title="A", folder_id=parent.id)
+    b = service.add_bookmark(url="https://b.example", title="B", folder_id=parent.id)
+    with pytest.raises(ReorderMismatchError):
+        service.reorder_children(parent.id, [a.id, b.id, "not-a-real-id"])
+
+
+def test_reorder_children_rejects_wrong_parent_id(service: BookmarkService):
+    p1 = service.create_folder("P1")
+    p2 = service.create_folder("P2")
+    a = service.add_bookmark(url="https://a.example", title="A", folder_id=p1.id)
+    b = service.add_bookmark(url="https://b.example", title="B", folder_id=p1.id)
+    other = service.add_bookmark(url="https://o.example", title="O", folder_id=p2.id)
+    with pytest.raises(ReorderMismatchError):
+        service.reorder_children(p1.id, [a.id, b.id, other.id])
 
 
 def test_stats(service: BookmarkService):

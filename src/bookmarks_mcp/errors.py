@@ -34,3 +34,9 @@ class TagNotFoundError(BookmarksError):
     def __init__(self, tag: str) -> None:
         super().__init__(f"tag not found: {tag}")
         self.tag = tag
+
+
+class ReorderMismatchError(BookmarksError):
+    def __init__(self, parent_id: str | None, message: str) -> None:
+        super().__init__(f"reorder mismatch for parent {parent_id}: {message}")
+        self.parent_id = parent_id
