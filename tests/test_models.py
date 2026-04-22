@@ -35,6 +35,23 @@ def test_folder_defaults_to_new_id_and_timestamps():
     assert a.updated_at >= a.created_at
 
 
+def test_position_defaults_to_zero():
+    b = Bookmark(url="https://example.com", title="x")
+    f = Folder(name="Reading")
+    assert b.position == 0
+    assert f.position == 0
+
+
+def test_position_sort_with_id_tiebreak():
+    # Items with the same position fall back to a stable id ordering.
+    a = Folder(id="aaa", name="A")
+    b = Bookmark(id="bbb", url="https://b.example", title="B")
+    c = Folder(id="ccc", name="C", position=1)
+    items: list[Folder | Bookmark] = [c, b, a]
+    items.sort(key=lambda it: (it.position, it.id))
+    assert [it.id for it in items] == ["aaa", "bbb", "ccc"]
+
+
 def test_library_roundtrip_json():
     lib = Library(
         folders=[Folder(name="Work")],

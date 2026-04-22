@@ -129,6 +129,62 @@ def test_delete_tag_removes_from_all_bookmarks(service: BookmarkService):
     assert service.get_bookmark(a.id).tags == ["keep"]
 
 
+def test_add_bookmark_appends_at_end_of_non_empty_folder(service: BookmarkService):
+    parent = service.create_folder("P")
+    a = service.add_bookmark(url="https://a.example", title="A", folder_id=parent.id)
+    b = service.add_bookmark(url="https://b.example", title="B", folder_id=parent.id)
+    c = service.add_bookmark(url="https://c.example", title="C", folder_id=parent.id)
+    positions = [a.position, b.position, c.position]
+    assert positions == sorted(positions)
+    assert len(set(positions)) == 3
+
+
+def test_move_bookmark_into_parent_lands_at_end(service: BookmarkService):
+    parent = service.create_folder("P")
+    a = service.add_bookmark(url="https://a.example", title="A", folder_id=parent.id)
+    b = service.add_bookmark(url="https://b.example", title="B", folder_id=parent.id)
+    c = service.add_bookmark(url="https://c.example", title="C", folder_id=parent.id)
+    x = service.add_bookmark(url="https://x.example", title="X")  # outside
+
+    moved = service.move_bookmark(x.id, parent.id)
+    max_sibling_pos = max(a.position, b.position, c.position)
+    assert moved.position > max_sibling_pos
+
+
+def test_move_bookmark_to_other_parent_leaves_remaining_order(service: BookmarkService):
+    src = service.create_folder("Src")
+    dst = service.create_folder("Dst")
+    a = service.add_bookmark(url="https://a.example", title="A", folder_id=src.id)
+    b = service.add_bookmark(url="https://b.example", title="B", folder_id=src.id)
+    c = service.add_bookmark(url="https://c.example", title="C", folder_id=src.id)
+    d = service.add_bookmark(url="https://d.example", title="D", folder_id=dst.id)
+
+    service.move_bookmark(b.id, dst.id)
+
+    # Remaining in src: A, C in original relative order.
+    src_items = sorted(
+        [bm for bm in service.list_bookmarks(folder_id=src.id)],
+        key=lambda bm: (bm.position, bm.id),
+    )
+    assert [bm.title for bm in src_items] == ["A", "C"]
+    assert a.position < c.position  # unchanged
+
+    # B lands at end of dst, after D.
+    moved_b = service.get_bookmark(b.id)
+    d_refreshed = service.get_bookmark(d.id)
+    assert moved_b.position > d_refreshed.position
+
+
+def test_move_folder_lands_at_end_of_new_parent(service: BookmarkService):
+    dst = service.create_folder("Dst")
+    child1 = service.create_folder("C1", parent_id=dst.id)
+    child2 = service.create_folder("C2", parent_id=dst.id)
+    orphan = service.create_folder("Orphan")  # top-level
+
+    moved = service.move_folder(orphan.id, dst.id)
+    assert moved.position > max(child1.position, child2.position)
+
+
 def test_stats(service: BookmarkService):
     f = service.create_folder("F")
     service.add_bookmark(url="https://a.example", title="A", folder_id=f.id, tags=["x", "y"])

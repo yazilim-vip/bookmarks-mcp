@@ -178,7 +178,7 @@ class ChromeStorage(Storage):
             self._ingest_root(library, node)
         return library
 
-    def _ingest_root(self, library: Library, node: dict[str, Any]) -> None:
+    def _ingest_root(self, library: Library, node: dict[str, Any], position: int = 0) -> None:
         guid = node.get("guid") or node.get("id") or f"chrome-root-{node.get('name', 'root')}"
         self._raw_by_guid[guid] = node
         library.folders.append(
@@ -186,14 +186,15 @@ class ChromeStorage(Storage):
                 id=guid,
                 name=node.get("name") or "root",
                 parent_id=None,
+                position=position,
                 created_at=_webkit_to_dt(node.get("date_added")),
                 updated_at=_webkit_to_dt(node.get("date_modified") or node.get("date_added")),
             )
         )
-        for child in node.get("children", []) or []:
-            self._ingest_child(library, child, parent_guid=guid)
+        for idx, child in enumerate(node.get("children", []) or []):
+            self._ingest_child(library, child, parent_guid=guid, position=idx)
 
-    def _ingest_child(self, library: Library, node: dict[str, Any], parent_guid: str) -> None:
+    def _ingest_child(self, library: Library, node: dict[str, Any], parent_guid: str, position: int = 0) -> None:
         guid = node.get("guid") or node.get("id")
         if not guid:
             return  # malformed, skip
@@ -205,12 +206,13 @@ class ChromeStorage(Storage):
                     id=guid,
                     name=node.get("name") or "",
                     parent_id=parent_guid,
+                    position=position,
                     created_at=_webkit_to_dt(node.get("date_added")),
                     updated_at=_webkit_to_dt(node.get("date_modified") or node.get("date_added")),
                 )
             )
-            for child in node.get("children", []) or []:
-                self._ingest_child(library, child, parent_guid=guid)
+            for idx, child in enumerate(node.get("children", []) or []):
+                self._ingest_child(library, child, parent_guid=guid, position=idx)
         elif ntype == "url":
             url = node.get("url") or ""
             if "://" not in url:
@@ -222,6 +224,7 @@ class ChromeStorage(Storage):
                     title=node.get("name") or url,
                     folder_id=parent_guid,
                     tags=[],  # Chrome has no tags
+                    position=position,
                     created_at=_webkit_to_dt(node.get("date_added")),
                     updated_at=_webkit_to_dt(node.get("date_last_used") or node.get("date_added")),
                 )
@@ -296,6 +299,10 @@ class ChromeStorage(Storage):
             children_by_parent.setdefault(f.parent_id, []).append(f)
         for b in library.bookmarks:
             children_by_parent.setdefault(b.folder_id, []).append(b)
+        # Interleave folders + bookmarks per parent by (position, id) so the
+        # on-disk children array reflects user-visible display order.
+        for key, items in children_by_parent.items():
+            items.sort(key=lambda it: (it.position, it.id))
 
         # Start from a deep copy of the original raw tree, then update each
         # root's children array in place. Unknown top-level keys are preserved.

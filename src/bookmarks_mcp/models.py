@@ -36,6 +36,7 @@ class Bookmark(_Base):
     description: str | None = None
     folder_id: str | None = None
     tags: list[str] = Field(default_factory=list)
+    position: int = 0
     created_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)
 
@@ -63,6 +64,7 @@ class Folder(_Base):
     id: str = Field(default_factory=new_id)
     name: NonEmptyStr
     parent_id: str | None = None
+    position: int = 0
     created_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)
 

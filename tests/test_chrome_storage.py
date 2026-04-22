@@ -181,6 +181,98 @@ def test_resolve_paths_defaults_to_default_profile():
     assert paths.bookmarks_file.parent.name == "Default"
 
 
+def test_roundtrip_preserves_interleaved_children_order(tmp_path: Path, force_not_running: None):
+    # Children under bookmark_bar: url, folder, url, folder, url — all mixed.
+    fixture: dict = {
+        "version": 1,
+        "roots": {
+            "bookmark_bar": {
+                "children": [
+                    {
+                        "date_added": "13300000000000000",
+                        "guid": "11111111-0000-4000-a000-000000000001",
+                        "id": "100",
+                        "name": "First URL",
+                        "type": "url",
+                        "url": "https://one.example",
+                    },
+                    {
+                        "children": [],
+                        "date_added": "13300000000000000",
+                        "date_modified": "13300000000000000",
+                        "guid": "22222222-0000-4000-a000-000000000002",
+                        "id": "101",
+                        "name": "First Folder",
+                        "type": "folder",
+                    },
+                    {
+                        "date_added": "13300000000000000",
+                        "guid": "33333333-0000-4000-a000-000000000003",
+                        "id": "102",
+                        "name": "Second URL",
+                        "type": "url",
+                        "url": "https://two.example",
+                    },
+                    {
+                        "children": [],
+                        "date_added": "13300000000000000",
+                        "date_modified": "13300000000000000",
+                        "guid": "44444444-0000-4000-a000-000000000004",
+                        "id": "103",
+                        "name": "Second Folder",
+                        "type": "folder",
+                    },
+                    {
+                        "date_added": "13300000000000000",
+                        "guid": "55555555-0000-4000-a000-000000000005",
+                        "id": "104",
+                        "name": "Third URL",
+                        "type": "url",
+                        "url": "https://three.example",
+                    },
+                ],
+                "date_added": "13300000000000000",
+                "date_modified": "13300000000000000",
+                "guid": "00000000-0000-4000-A000-000000000002",
+                "id": "1",
+                "name": "Bookmarks bar",
+                "type": "folder",
+            },
+            "other": {
+                "children": [],
+                "date_added": "13300000000000000",
+                "date_modified": "0",
+                "guid": "00000000-0000-4000-A000-000000000003",
+                "id": "2",
+                "name": "Other bookmarks",
+                "type": "folder",
+            },
+            "synced": {
+                "children": [],
+                "date_added": "13300000000000000",
+                "date_modified": "0",
+                "guid": "00000000-0000-4000-A000-000000000004",
+                "id": "3",
+                "name": "Mobile bookmarks",
+                "type": "folder",
+            },
+        },
+    }
+    p = tmp_path / "Bookmarks"
+    p.write_text(json.dumps(fixture), encoding="utf-8")
+
+    original_names = [c["name"] for c in fixture["roots"]["bookmark_bar"]["children"]]
+
+    # Load → save without any mutation → reload; order must survive.
+    store = ChromeStorage(p)
+    lib = store.load()
+    store.save(lib)
+
+    raw = json.loads(p.read_text())
+    roundtripped = [c["name"] for c in raw["roots"]["bookmark_bar"]["children"]]
+    assert roundtripped == original_names
+
+
 def test_webkit_epoch_conversion():
     # 13300000000000000 μs since 1601 ≈ 2022-03-03
     dt = _webkit_to_dt("13300000000000000")
