@@ -39,6 +39,7 @@ def test_expected_tools_are_registered():
         "rename_tag",
         "delete_tag",
         "stats",
+        "reorder_children",
     }
     assert expected.issubset(_tool_names())
 
