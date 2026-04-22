@@ -45,6 +45,7 @@ def parse(html: str) -> Library:
 def _walk(dl: Tag, parent_id: str | None, library: Library) -> None:
     children = [c for c in dl.children if isinstance(c, Tag)]
     i = 0
+    position = 0
     while i < len(children):
         node = children[i]
         name = (node.name or "").lower()
@@ -58,10 +59,12 @@ def _walk(dl: Tag, parent_id: str | None, library: Library) -> None:
             folder = Folder(
                 name=h3.get_text(strip=True) or "Untitled folder",
                 parent_id=parent_id,
+                position=position,
                 created_at=_parse_timestamp(h3.get("add_date")) or _now(),
                 updated_at=_parse_timestamp(h3.get("last_modified")) or _now(),
             )
             library.folders.append(folder)
+            position += 1
             sibling = children[i + 1] if i + 1 < len(children) else None
             if sibling is not None and (sibling.name or "").lower() == "dl":
                 _walk(sibling, parent_id=folder.id, library=library)
@@ -88,6 +91,7 @@ def _walk(dl: Tag, parent_id: str | None, library: Library) -> None:
                 title=a.get_text(strip=True) or href,
                 folder_id=parent_id,
                 tags=tags,
+                position=position,
                 created_at=_parse_timestamp(a.get("add_date")) or _now(),
                 updated_at=_parse_timestamp(a.get("last_modified")) or _now(),
             )
@@ -96,6 +100,7 @@ def _walk(dl: Tag, parent_id: str | None, library: Library) -> None:
             continue
 
         library.bookmarks.append(bookmark)
+        position += 1
         sibling = children[i + 1] if i + 1 < len(children) else None
         if sibling is not None and (sibling.name or "").lower() == "dd":
             description = sibling.get_text(strip=True)
@@ -136,19 +141,27 @@ def _emit(
     indent: int,
 ) -> None:
     pad = " " * indent
-    for folder in by_parent.get(parent_id, []):
-        created = int(folder.created_at.timestamp())
-        modified = int(folder.updated_at.timestamp())
-        lines.append(f'{pad}<DT><H3 ADD_DATE="{created}" LAST_MODIFIED="{modified}">{escape(folder.name)}</H3>')
-        lines.append(f"{pad}<DL><p>")
-        _emit(lines, folder.id, by_parent, by_folder, indent + 4)
-        lines.append(f"{pad}</DL><p>")
-    for bookmark in by_folder.get(parent_id, []):
-        created = int(bookmark.created_at.timestamp())
-        modified = int(bookmark.updated_at.timestamp())
-        attrs = f'HREF="{escape(str(bookmark.url), quote=True)}" ADD_DATE="{created}" LAST_MODIFIED="{modified}"'
-        if bookmark.tags:
-            attrs += f' TAGS="{escape(",".join(bookmark.tags), quote=True)}"'
-        lines.append(f"{pad}<DT><A {attrs}>{escape(bookmark.title)}</A>")
-        if bookmark.description:
-            lines.append(f"{pad}<DD>{escape(bookmark.description)}")
+    combined: list[Folder | Bookmark] = [
+        *by_parent.get(parent_id, []),
+        *by_folder.get(parent_id, []),
+    ]
+    combined.sort(key=lambda it: (it.position, it.id))
+    for item in combined:
+        if isinstance(item, Folder):
+            folder = item
+            created = int(folder.created_at.timestamp())
+            modified = int(folder.updated_at.timestamp())
+            lines.append(f'{pad}<DT><H3 ADD_DATE="{created}" LAST_MODIFIED="{modified}">{escape(folder.name)}</H3>')
+            lines.append(f"{pad}<DL><p>")
+            _emit(lines, folder.id, by_parent, by_folder, indent + 4)
+            lines.append(f"{pad}</DL><p>")
+        else:
+            bookmark = item
+            created = int(bookmark.created_at.timestamp())
+            modified = int(bookmark.updated_at.timestamp())
+            attrs = f'HREF="{escape(str(bookmark.url), quote=True)}" ADD_DATE="{created}" LAST_MODIFIED="{modified}"'
+            if bookmark.tags:
+                attrs += f' TAGS="{escape(",".join(bookmark.tags), quote=True)}"'
+            lines.append(f"{pad}<DT><A {attrs}>{escape(bookmark.title)}</A>")
+            if bookmark.description:
+                lines.append(f"{pad}<DD>{escape(bookmark.description)}")

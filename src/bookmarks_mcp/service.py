@@ -32,6 +32,22 @@ def _descendant_ids(library: Library, folder_id: str) -> set[str]:
     return out
 
 
+def _next_position(library: Library, parent_id: str | None) -> int:
+    """Next sibling position within ``parent_id`` (folders + bookmarks combined).
+
+    Returns ``max(siblings.position) + 1`` so freshly created / moved items land
+    at the end of the parent's children list. Returns 0 for an empty parent.
+    """
+    highest = -1
+    for f in library.folders:
+        if f.parent_id == parent_id and f.position > highest:
+            highest = f.position
+    for b in library.bookmarks:
+        if b.folder_id == parent_id and b.position > highest:
+            highest = b.position
+    return highest + 1
+
+
 def _would_create_cycle(library: Library, folder_id: str, new_parent_id: str | None) -> bool:
     if new_parent_id is None:
         return False
@@ -93,7 +109,11 @@ class BookmarkService:
         with self.storage.transaction() as library:
             if parent_id is not None:
                 self._require_folder(library, parent_id)
-            folder = Folder(name=name, parent_id=parent_id)
+            folder = Folder(
+                name=name,
+                parent_id=parent_id,
+                position=_next_position(library, parent_id),
+            )
             library.folders.append(folder)
         return folder
 
@@ -111,7 +131,9 @@ class BookmarkService:
                 self._require_folder(library, parent_id)
             if _would_create_cycle(library, folder_id, parent_id):
                 raise FolderCycleError(folder_id, parent_id)
+            new_position = _next_position(library, parent_id)
             folder.parent_id = parent_id
+            folder.position = new_position
             folder.updated_at = _now()
         return folder
 
@@ -175,6 +197,7 @@ class BookmarkService:
                 folder_id=folder_id,
                 tags=tags or [],
                 description=description,
+                position=_next_position(library, folder_id),
             )
             library.bookmarks.append(bookmark)
         return bookmark
@@ -205,7 +228,9 @@ class BookmarkService:
             bookmark = self._require_bookmark(library, bookmark_id)
             if folder_id is not None:
                 self._require_folder(library, folder_id)
+            new_position = _next_position(library, folder_id)
             bookmark.folder_id = folder_id
+            bookmark.position = new_position
             bookmark.updated_at = _now()
         return bookmark
 
