@@ -160,8 +160,11 @@ class ChromeStorage(Storage):
     def load(self) -> Library:
         if not self.path.exists():
             raise ChromeBookmarksNotFoundError(
-                f"Chrome Bookmarks file not found: {self.path}. "
-                "Check BOOKMARKS_MCP_CHROME_PROFILE or BOOKMARKS_MCP_CHROME_PATH."
+                f"Chrome Bookmarks file not found: {self.path}\n"
+                "If your Chrome profile lives elsewhere, set one of:\n"
+                "  BOOKMARKS_MCP_CHROME_PROFILE=<profile name>  (e.g. 'Profile 1')\n"
+                "  BOOKMARKS_MCP_CHROME_PATH=<absolute path to Bookmarks file>\n"
+                "Run `bookmarks-mcp info` to confirm the resolved target path."
             )
         raw = json.loads(self.path.read_text(encoding="utf-8"))
         self._raw = raw

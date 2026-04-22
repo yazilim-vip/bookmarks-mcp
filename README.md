@@ -13,7 +13,17 @@
 
 ## Quickstart — Chrome backend
 
-**Close Chrome before any write.** The server refuses writes while Chrome is running.
+**Fully quit Chrome (`Cmd+Q` on macOS) before any write.** Closing the window is not enough — the server refuses writes while Chrome is running. Run `bookmarks-mcp info` any time to see **which file** the server is actually editing:
+
+```bash
+BOOKMARKS_MCP_BACKEND=chrome uvx --from git+https://github.com/yazilim-vip/bookmarks-mcp bookmarks-mcp info
+# backend:      chrome
+# target:       /Users/you/Library/Application Support/Google/Chrome/Default/Bookmarks
+# exists:       True
+# profile:      Default
+# bookmarks:    42
+# folders:      9
+```
 
 ### Claude Code CLI
 
@@ -69,6 +79,34 @@ Default path per OS:
 - macOS: `~/Library/Application Support/Google/Chrome/<profile>/Bookmarks`
 - Linux: `~/.config/google-chrome/<profile>/Bookmarks`
 - Windows: `%LOCALAPPDATA%\Google\Chrome\User Data\<profile>\Bookmarks`
+
+### Custom Chrome install / other Chromium browsers
+
+If your `Bookmarks` file lives somewhere non-standard (portable Chrome, Chromium, Brave, Edge, Arc, Vivaldi, or a sync-shared directory), point the server at it explicitly with `BOOKMARKS_MCP_CHROME_PATH`. This overrides **both** the default user-data dir **and** the profile name:
+
+```bash
+# Brave on macOS
+BOOKMARKS_MCP_CHROME_PATH="$HOME/Library/Application Support/BraveSoftware/Brave-Browser/Default/Bookmarks" \
+BOOKMARKS_MCP_BACKEND=chrome \
+  uvx --from git+https://github.com/yazilim-vip/bookmarks-mcp bookmarks-mcp info
+```
+
+```json
+{
+  "mcpServers": {
+    "bookmarks": {
+      "command": "uvx",
+      "args": ["--from", "git+https://github.com/yazilim-vip/bookmarks-mcp", "bookmarks-mcp"],
+      "env": {
+        "BOOKMARKS_MCP_BACKEND": "chrome",
+        "BOOKMARKS_MCP_CHROME_PATH": "/absolute/path/to/Bookmarks"
+      }
+    }
+  }
+}
+```
+
+Any Chromium-based browser works — the `Bookmarks` file format is shared. Confirm with `bookmarks-mcp info` that the `target:` line points at the file you expect before relying on it.
 
 Behavior:
 
